@@ -49,6 +49,20 @@
 
 (require 'defhook)
 
+(define-minor-mode org-status-minor-mode
+  "Post status updates to social sites."
+  nil
+  " OrgStat"
+  :group    'org-status
+  :global   nil
+  (defhook org-auto-status-updates (write-file-functions :local t)
+      "Run `org-status-updates' before saving the current buffer.
+This must return nil or the file is considered saved. See
+`write-file-functions' for more info."
+      (when org-status-minor-mode
+        (org-status-updates))
+      nil))
+
 (defgroup org-status nil
   "Settings for `org-status-update' commands."
   :group 'org)
@@ -69,8 +83,29 @@ See https://github.com/sferik/t for instructions on installing `t'."
   :risky nil
   :group 'org-status)
 
+(defcustom org-status-output-file-regexp ".*-status\.org"
+  "Files matching regexp will go into `org-status-update-minor-mode'.
+An `org-mode' buffer will automatically enable
+`org-status-update-minor-mode' when the file path matches this
+regexp."
+  :type 'string
+  :safe t
+  :risky nil
+  :group 'org-status)
+
+(defhook enable-org-status-update-minor-mode (org-mode-hook)
+  "Determine if `org-status-minor-mode' should be enabled in this buffer.
+If the full pathname of the file of this buffer matches
+`org-status-output-file-regexp', then
+`org-status-update-minor-mode' will be enabled when `org-mode' is
+entered."
+  (when (and buffer-file-name
+             (string-match org-status-output-file-regexp buffer-file-name))
+    (org-status-minor-mode 1)))
+
 (defun org-status-tweet ()
   "Do a tweet for the current headline."
+  (message "ding")
   (beginning-of-line 1)
   (let* ((status-props      (org-agenda-get-some-entry-text
                              (point-marker) 9999))
@@ -92,8 +127,11 @@ See https://github.com/sferik/t for instructions on installing `t'."
                                                      (point-max)))
                    (1+ (length org-status-twitter-command)))))
       (if (zerop success)
-          (progn
-            (org-todo 'done)
+          (let* ((tags (org-get-tags))
+                 (new (cons "TWEETED_NS" (remove "TWEET_NS" tags))))
+            (message "old=%s, new=%s." tags new)
+            (org-set-tags-to new)
+            (org-agenda-align-tags)
             output)
         ;; Remove trailing newline and period for error messages.
         (let ((error-string (substring output 0 (- (length output) 2))))
@@ -102,51 +140,14 @@ See https://github.com/sferik/t for instructions on installing `t'."
 
 (defun org-status-updates ()
   "Loop through entries looking for status updates."
+  (message "dong")
   (interactive)
   (let ((results (org-map-entries #'org-status-tweet
-                                        "TWEET+TODO=\"POST\"")))
+                                  "TWEET_NS" 'file)))
    (when results
      (with-output-to-temp-buffer org-status-output-buffer
       (set-buffer org-status-output-buffer)
       (print-elements-of-list results)))))
-
-(unless :COMMENT-on-hold 
-
-(defvar org-status-buffer nil
-  "Non-nil if `org-status-updates` shoul be run when saving this buffer.")
-
-(make-variable-buffer-local 'org-status-buffer)
-(setq-default org-status-buffer nil)
-
-(defhook set-org-status-buffer (org-mode-hook)
-  (if (string-match "-status.org$" (or (buffer-file-name) ""))
-      (setq org-status-buffer t)
-    (setq org-status-buffer nil)))
-
-(defhook org-auto-status-updates (write-file-functions)
-  "If local variable `org-status-buffer`, run `org-status-updates' on it."
-  (when org-status-buffer
-    (org-status-updates))
-  nil)
- )
-
-(defhook set-org-status-buffer (org-mode-hook)
-  (when (string-match "-status.org$" (or (buffer-file-name) ""))
-    (defhook org-auto-status-updates (write-file-functions :local t)
-      "Run `org-status-updates' before saving the current buffer."
-      (org-status-updates)
-      nil)))
-
-(defun org-auto-status-updates-toggle (arg)
-  "Toggle `org-status-buffer' in the local buffer.
-If optional ARG is positive, set `org-status-buffer' to t, if
-negative, set to nil."
-  (interactive "p")
-  (let ((a (when current-prefix-arg arg)))
-    (cond ((null a)     (setq org-status-buffer (not org-status-buffer)))
-          ((> a 0)      (setq org-status-buffer t))
-          (t            (setq org-status-buffer nil))))
-  (message "org-status-buffer is %s." org-status-buffer))
 
 (provide 'org-status)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
