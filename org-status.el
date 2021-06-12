@@ -105,6 +105,7 @@ entered."
 
 (defun org-status-tweet ()
   "Do a tweet for the current headline."
+  (interactive)
   (message "ding")
   (beginning-of-line 1)
   (let* ((status-props      (org-agenda-get-some-entry-text
@@ -120,17 +121,21 @@ entered."
                             (shell-quote-argument status))
                     org-status-output-buffer
                     org-status-output-buffer))
-          (output (substring 
-                   (save-excursion
+          (output (save-excursion
                      (set-buffer org-status-output-buffer)
-                     (buffer-substring-no-properties (point-min)
-                                                     (point-max)))
-                   (1+ (length org-status-twitter-command)))))
+		     (let* (
+			    (buffermsg (buffer-substring-no-properties (point-min)
+								       (point-max)))
+			    (match org-status-twitter-command)
+			    (matchpos (string-match-p match buffermsg)))
+		       (substring buffermsg (if (null match) (+ (length match) matchpos) 0))))))
       (if (zerop success)
           (let* ((tags (org-get-tags))
                  (new (cons "TWEETED_NS" (remove "TWEET_NS" tags))))
             (message "old=%s, new=%s." tags new)
             (org-set-tags-to new)
+	    (org-set-property "TWEET_ID" (when (string-match "[0-9]+" output)
+					   (match-string 0 output)))
             (org-agenda-align-tags)
             output)
         ;; Remove trailing newline and period for error messages.

@@ -137,6 +137,7 @@
 ;; 
 ;;; Code:
 
+;; Ensure defmacro* works: https://emacs.stackexchange.com/a/62825/31458
 (require 'cl)
 
 (defgroup defhook nil "Define mode hooks wherever you want." 
